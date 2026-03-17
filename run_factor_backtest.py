@@ -39,6 +39,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--buy-threshold", type=float, default=0.2, help="Alpha BUY threshold (default: 0.2)")
     p.add_argument("--sell-threshold", type=float, default=-0.2, help="Alpha SELL threshold (default: -0.2)")
     p.add_argument("--output", default=None, help="Output HTML path")
+    p.add_argument("--no-external", action="store_true",
+                   help="Skip external data (VIX/macro/fundamentals) — use technical factors only")
     return p.parse_args()
 
 
@@ -71,6 +73,7 @@ async def run_async(args: argparse.Namespace) -> None:
         slippage_bps=args.slippage,
         buy_threshold=args.buy_threshold,
         sell_threshold=args.sell_threshold,
+        use_external_data=not args.no_external,
     )
     result = engine.run()
 

@@ -5,6 +5,6 @@ logs/
 __pycache__/
 *.pyc
 .venv/
-data/
+/data/
 backtest_report*.html
 .claude/

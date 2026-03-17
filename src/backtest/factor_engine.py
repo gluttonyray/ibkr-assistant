@@ -68,15 +68,20 @@ class FactorBacktestEngine:
         factors: Optional[List[BaseFactor]] = None,
         risk_kwargs: Optional[dict] = None,
         sizer_kwargs: Optional[dict] = None,
+        use_external_data: bool = True,
     ) -> None:
         self.symbol = symbol
         self.data = data
         self.initial_capital = initial_capital
         self.buy_threshold = buy_threshold
         self.sell_threshold = sell_threshold
+        self.use_external_data = use_external_data
 
-        # Ensure technical factors are registered
-        import src.factors.technical  # noqa: F401
+        # Ensure all factor categories are registered
+        import src.factors.technical   # noqa: F401
+        import src.factors.sentiment   # noqa: F401
+        import src.factors.macro       # noqa: F401
+        import src.factors.fundamental # noqa: F401
 
         self._factors: List[BaseFactor] = factors if factors is not None else FactorRegistry.create_all()
         self._combiner = AlphaCombiner()
@@ -105,6 +110,19 @@ class FactorBacktestEngine:
             "Starting factor backtest: %s | %d bars | capital=$%.0f | %d factors",
             self.symbol, n, self.initial_capital, len(self._factors),
         )
+
+        # ── Load external data (sentiment / macro / fundamental) ──────
+        external_lookup: dict = {}
+        if self.use_external_data:
+            try:
+                from src.data.external_loader import ExternalDataLoader
+                start_str = self.data.index[0].strftime("%Y-%m-%d")
+                end_str = self.data.index[-1].strftime("%Y-%m-%d")
+                external_lookup = ExternalDataLoader().load_aligned(
+                    self.symbol, start_str, end_str
+                )
+            except Exception as exc:
+                logger.warning("External data load failed — running with technical factors only: %s", exc)
 
         # Reset factor history before run
         for f in self._factors:
@@ -171,7 +189,15 @@ class FactorBacktestEngine:
                 continue
 
             # ── Compute factors ──────────────────────────────────────────
-            factor_data = FactorData(ohlcv=window, symbol=self.symbol)
+            bar_date = ts.date() if hasattr(ts, "date") else ts.to_pydatetime().date()
+            ext = external_lookup.get(bar_date, {})
+            factor_data = FactorData(
+                ohlcv=window,
+                symbol=self.symbol,
+                sentiment=ext.get("sentiment"),
+                macro=ext.get("macro"),
+                fundamental=ext.get("fundamental"),
+            )
             factor_results = [f.compute(factor_data) for f in self._factors]
 
             # ── Detect regime ────────────────────────────────────────────

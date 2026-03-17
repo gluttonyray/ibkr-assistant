@@ -111,7 +111,7 @@ async def run_async(args: argparse.Namespace) -> None:
         print("  Suggested .env settings:")
         print(f"    BUY_THRESHOLD={sp.get('buy_threshold', 0.20)}")
         print(f"    SELL_THRESHOLD=-{sp.get('buy_threshold', 0.20)}")
-        print(f"    # exit_long_threshold={exit_long}  max_holding_bars={sp.get('max_holding_bars', 150)}")
+        print(f"    # exit_long_threshold={exit_long}")
         print()
 
     # ── HTML report ───────────────────────────────────────────────────

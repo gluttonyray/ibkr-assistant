@@ -48,8 +48,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_FACTOR_GRID: Dict[str, List] = {
     "buy_threshold":       [0.15, 0.20, 0.25, 0.30],
-    "exit_long_threshold": [-0.10, -0.05, 0.0],
-    "max_holding_bars":    [80, 120, 160, 200],
+    "exit_long_threshold": [-0.15, -0.10, -0.05, 0.0],
 }
 
 
@@ -234,7 +233,6 @@ class FactorWalkForwardOptimizer:
             sell_threshold=-buy_thr,
             exit_long_threshold=exit_long,
             exit_short_threshold=-exit_long,
-            max_holding_bars=params["max_holding_bars"],
             use_ic_weights=self.use_ic_weights,
             use_external_data=False,
             external_lookup=external_lookup,
@@ -296,7 +294,6 @@ class FactorWalkForwardOptimizer:
                 sell_threshold=-buy_thr,
                 exit_long_threshold=exit_long,
                 exit_short_threshold=-exit_long,
-                max_holding_bars=best_params["max_holding_bars"],
                 use_ic_weights=self.use_ic_weights,
                 use_external_data=False,
                 external_lookup=external_lookup,

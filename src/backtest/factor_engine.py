@@ -57,8 +57,10 @@ class FactorBacktestEngine:
         Exit a long position when score drops below this (default -0.05).
     exit_short_threshold : float
         Exit a short position when score rises above this (default 0.05).
-    max_holding_bars : int
-        Force-close any position held longer than this many bars (default 150).
+    max_holding_bars : int or None
+        Force-close after this many bars. None (default) = disabled.
+        Use only as a safety valve in range-bound markets; in trending
+        markets a time limit cuts profitable positions prematurely.
     use_ic_weights : bool
         If True, run a pre-pass to compute IC-based factor weights before
         the main bar loop (default True).
@@ -86,7 +88,7 @@ class FactorBacktestEngine:
         sell_threshold: float = -0.2,
         exit_long_threshold: float = -0.05,
         exit_short_threshold: float = 0.05,
-        max_holding_bars: int = 150,
+        max_holding_bars: Optional[int] = None,
         use_ic_weights: bool = True,
         ic_forward_horizon: int = 10,
         factors: Optional[List[BaseFactor]] = None,
@@ -268,7 +270,10 @@ class FactorBacktestEngine:
                     (is_long and alpha.score < self.exit_long_threshold)
                     or (not is_long and alpha.score > self.exit_short_threshold)
                 )
-                time_exit = _bars_held >= self.max_holding_bars
+                time_exit = (
+                    self.max_holding_bars is not None
+                    and _bars_held >= self.max_holding_bars
+                )
                 if score_exit or time_exit:
                     reason = "score_exit" if score_exit else "max_holding"
                     trade = self.portfolio.force_close(price, ts, i)

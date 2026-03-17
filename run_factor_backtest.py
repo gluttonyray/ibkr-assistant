@@ -40,8 +40,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--sell-threshold", type=float, default=-0.2, help="Alpha SELL threshold (default: -0.2)")
     p.add_argument("--exit-long-threshold", type=float, default=-0.05,
                    help="Exit long when score drops below this (default: -0.05)")
-    p.add_argument("--max-holding-bars", type=int, default=150,
-                   help="Force-close after this many bars (default: 150)")
     p.add_argument("--no-ic-weights", action="store_true",
                    help="Disable IC-based factor weighting")
     p.add_argument("--no-external", action="store_true",
@@ -81,7 +79,6 @@ async def run_async(args: argparse.Namespace) -> None:
         sell_threshold=args.sell_threshold,
         exit_long_threshold=args.exit_long_threshold,
         exit_short_threshold=-args.exit_long_threshold,
-        max_holding_bars=args.max_holding_bars,
         use_ic_weights=not args.no_ic_weights,
         use_external_data=not args.no_external,
     )

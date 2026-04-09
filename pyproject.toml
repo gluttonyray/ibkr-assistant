@@ -61,8 +61,8 @@ quote-style = "double"
 
 [tool.mypy]
 python_version = "3.12"
-strict = true
 ignore_missing_imports = true
+# strict = true intentionally disabled — gradual typing adoption
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

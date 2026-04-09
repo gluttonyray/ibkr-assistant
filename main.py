@@ -1,267 +1,218 @@
-"""
-IBKR Real-Time Stock Trading Signal Assistant
-=============================================
+#!/usr/bin/env python3
+"""IBKR Signal Assistant — 新系统入口点。
 
-Entry point.  Run::
+运行模式：
+  信号模式（auto_trade=false）：计算并打印信号，不下单
+  实盘模式（auto_trade=true）：通过 IBKR TWS 自动执行交易
 
-    python main.py
-
-Environment variables are loaded from .env (see .env.example).
+用法：
+  cd new/
+  .venv/bin/python main.py                         # 使用默认配置
+  .venv/bin/python main.py --config configs/app.yaml
+  .venv/bin/python main.py --backtest --data data/ES_15min.csv
+  .venv/bin/python main.py --backtest --data data/ES_15min.csv --model models/layer1/v2_20260408/
 """
 from __future__ import annotations
 
+import argparse
 import asyncio
 import logging
-import signal
 import sys
-from typing import Dict
+from pathlib import Path
 
-import pandas as pd
-from ib_insync import util
+# 确保 src 在 import 路径中
+sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from src.config import cfg
-from src.indicators.aggregator import AggregateResult, SignalAggregator
-from src.trading.data_feed import DataFeed
-from src.trading.auto_trader import AutoTrader
-from src.ui.dashboard import Dashboard
-
-# Factor-mode imports (lazy — only loaded when FACTOR_MODE=true)
-if cfg.factor_mode:
-    import src.factors.technical  # registers all 11 technical factors
-    from src.alpha.combiner import AlphaCombiner, AlphaSignal
-    from src.factors.base import FactorData
-    from src.factors.registry import FactorRegistry
-    from src.indicators.regime import RegimeDetector as _RegimeDetector
-    from src.risk.position_sizer import PositionSizer
-    from src.risk.risk_manager import PositionInfo, RiskManager
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Logging setup
-# ─────────────────────────────────────────────────────────────────────────────
-
-logging.basicConfig(
-    level=getattr(logging, cfg.log_level.upper(), logging.INFO),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.StreamHandler(sys.stderr)],
-)
-logger = logging.getLogger("main")
-
-# Silence ib_insync internal noise at INFO level
-logging.getLogger("ib_insync").setLevel(logging.WARNING)
+from quant.config.loader import load_config
+from quant.config.schema import AppConfig
+from quant.instrument.registry import InstrumentRegistry
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Main orchestrator
-# ─────────────────────────────────────────────────────────────────────────────
+def setup_logging(cfg: AppConfig) -> None:
+    log_dir = Path(cfg.log_file).parent
+    log_dir.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=getattr(logging, cfg.log_level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(cfg.log_file),
+        ],
+    )
 
-class TradingAssistant:
-    def __init__(self) -> None:
-        self.feed = DataFeed()
-        self.dashboard = Dashboard()
-        self.auto_trader: AutoTrader | None = None
-        self._running = False
-        self._latest: Dict[str, AggregateResult] = {}
 
-        # Choose pipeline mode
-        if cfg.factor_mode:
-            logger.info("FACTOR_MODE enabled — using factor-based pipeline")
-            self.aggregator = None
-            self._factor_combiner = AlphaCombiner()
-            self._factor_sizer = PositionSizer(
-                max_risk_per_trade=cfg.risk_per_trade,
-                max_position_pct=cfg.max_position_pct,
-                stop_atr_multiple=cfg.stop_loss_atr,
-            )
-            self._factor_risk = RiskManager(
-                stop_loss_atr=cfg.stop_loss_atr,
-                take_profit_atr=cfg.take_profit_atr,
-                trailing_stop_atr=cfg.trailing_stop_atr,
-                max_drawdown_pct=cfg.max_drawdown_pct,
-            )
-            self._factor_regime = _RegimeDetector()
-            self._factors = FactorRegistry.create_all()
-            self._latest_alpha: Dict[str, "AlphaSignal"] = {}
-        else:
-            self.aggregator = SignalAggregator()
+async def run_live(cfg: AppConfig, registry: InstrumentRegistry) -> None:
+    """实盘/信号模式主循环。"""
+    from quant.data.sources.ibkr_margin import IBKRMarginRefresher
+    from quant.execution.ibkr_executor import IBKRExecutor
+    from quant.strategy.layer1.layer1 import Layer1
+    from quant.strategy.layer2.layer2 import Layer2
+    from quant.strategy.layer2.composer import DefaultComposer
+    from quant.risk.position_sizer import ATRPositionSizer
+    from quant.risk.risk_engine import RiskEngine
 
-    async def run(self) -> None:
-        self._running = True
-        mode_str = "FACTOR" if cfg.factor_mode else "INDICATOR"
-        logger.info("Starting IBKR Signal Assistant… [mode=%s]", mode_str)
-        logger.info("Symbols: %s", cfg.symbols)
-        logger.info("Auto-trade: %s", cfg.auto_trade)
-        if cfg.factor_mode:
-            logger.info("Factor pipeline: %d factors registered", len(self._factors))
-        else:
-            logger.info("Thresholds: BUY>%.2f  SELL<%.2f", cfg.buy_threshold, cfg.sell_threshold)
+    logger = logging.getLogger(__name__)
+    hkd_rate = cfg.risk.default_hkd_usd_rate
 
-        # Connect
-        await self.feed.connect()
+    layer1 = Layer1(cfg.strategy.layer1)
+    layer2 = Layer2(cfg.strategy.layer2)
+    composer = DefaultComposer(cfg.strategy)
+    risk_engine = RiskEngine(cfg.risk, hkd_usd_rate=hkd_rate)
+    sizer = ATRPositionSizer(cfg.risk, hkd_usd_rate=hkd_rate)
 
-        # Set up auto-trader if enabled
-        if cfg.auto_trade:
-            self.auto_trader = AutoTrader(self.feed.ib)
-            logger.warning(
-                "AUTO-TRADE ENABLED — orders will be submitted to paper account."
-            )
+    executor = IBKRExecutor(cfg.ibkr, registry)
 
-        # Start dashboard in the event loop (non-blocking)
-        self.dashboard.start()
+    # 启动时动态拉取最新保证金（有缓存用缓存，TTL 6 小时）
+    refresher = IBKRMarginRefresher(
+        host=cfg.ibkr.host,
+        port=cfg.ibkr.port,
+        client_id=cfg.ibkr.client_id + 10,  # 避免与主连接 ID 冲突
+    )
+    refresher.refresh(registry)
 
-        # Seed history + subscribe to real-time bars.
-        # on_ready: each symbol populates the dashboard as soon as its
-        # historical data is loaded (no need to wait for all symbols).
-        await self.feed.start(
-            on_bar=self._on_bar,
-            on_ready=self._on_initial,
+    mode = "实盘" if cfg.strategy.auto_trade else "信号"
+    logger.info(f"启动 {mode}模式，品种：{cfg.ibkr.symbols}")
+
+    if cfg.strategy.auto_trade:
+        await executor.connect()
+
+    try:
+        # 实际行情数据通过 IBKR data_feed 获取（此处为框架骨架）
+        # TODO: 接入 IBKRHistoricalSource 初始化 warmup，然后订阅实时 bar
+        logger.info("主循环就绪（接入实时数据源后完整运行）")
+        while True:
+            await asyncio.sleep(cfg.refresh_interval)
+    finally:
+        if cfg.strategy.auto_trade:
+            await executor.disconnect()
+
+
+def run_backtest(
+    cfg: AppConfig,
+    registry: InstrumentRegistry,
+    data_path: str,
+    model_path: str | None = None,
+) -> None:
+    """从 CSV/Parquet 文件运行回测。"""
+    import polars as pl
+    from quant.engine.backtest import BacktestEngine
+    from quant.strategy.layer1.layer1 import Layer1
+    from quant.strategy.layer2.layer2 import Layer2
+    from quant.strategy.layer2.composer import DefaultComposer
+    from quant.risk.position_sizer import ATRPositionSizer
+    from quant.risk.risk_engine import RiskEngine
+    from quant.core.types import Bar
+    from datetime import timezone
+
+    logger = logging.getLogger(__name__)
+    logger.info(f"回测数据：{data_path}")
+
+    # 加载数据
+    p = Path(data_path)
+    if p.suffix == ".parquet":
+        df = pl.read_parquet(p)
+    else:
+        df = pl.read_csv(p, try_parse_dates=True)
+
+    # 推断品种（从文件名），未在 registry 中的品种自动创建通用股票合约
+    from quant.core.types import Currency, Instrument, InstrumentType
+    symbol = p.stem.split("_")[0].upper()
+    try:
+        inst = registry.get(symbol)
+    except KeyError:
+        logger.info(
+            f"品种 {symbol} 不在 instruments.yaml 中，自动创建通用股票合约（multiplier=1, tick=0.01）"
         )
-
-        # Keep running until interrupted
-        try:
-            while self._running:
-                await asyncio.sleep(1)
-        except (KeyboardInterrupt, asyncio.CancelledError):
-            pass
-        finally:
-            await self._shutdown()
-
-    def _on_initial(self, symbol: str, df: pd.DataFrame) -> None:
-        """Called per-symbol as soon as historical data is seeded."""
-        try:
-            if cfg.factor_mode:
-                self._process_bar_factor(symbol, df)
-            else:
-                result = self.aggregator.process(symbol, df)
-                self._latest[symbol] = result
-                self.dashboard.update(symbol, result)
-            logger.info("Initial analysis done for %s (%d bars).", symbol, len(df))
-        except Exception as exc:
-            logger.error("Initial analysis failed for %s: %s", symbol, exc)
-
-    def _on_bar(self, symbol: str, df: pd.DataFrame) -> None:
-        """Called by DataFeed on every new completed bar.
-        Offloads computation to a thread pool to avoid blocking the ib_insync loop.
-        """
-        loop = asyncio.get_event_loop()
-        if cfg.factor_mode:
-            loop.run_in_executor(None, self._process_bar_factor, symbol, df)
-        else:
-            loop.run_in_executor(None, self._process_bar, symbol, df)
-
-    def _process_bar(self, symbol: str, df: pd.DataFrame) -> None:
-        """Indicator-mode: heavy work in thread pool."""
-        result = self.aggregator.process(symbol, df)
-        self._latest[symbol] = result
-        self.dashboard.update(symbol, result)
-
-        if result.confirmed and result.final_signal != "HOLD":
-            logger.info(
-                "[%s] %s  score=%.3f  bars=%d",
-                symbol, result.final_signal, result.score, len(df),
-            )
-
-        if self.auto_trader and result.confirmed:
-            loop = asyncio.get_event_loop()
-            asyncio.run_coroutine_threadsafe(
-                self.auto_trader.on_signal(symbol, result.final_signal, df, result.score),
-                loop,
-            )
-
-    def _process_bar_factor(self, symbol: str, df: pd.DataFrame) -> None:
-        """Factor-mode: compute factors, combine, dispatch signal."""
-        import pandas_ta as ta
-
-        factor_data = FactorData(ohlcv=df, symbol=symbol)
-        factor_results = [f.compute(factor_data) for f in self._factors]
-        regime = self._factor_regime.detect(df)
-        alpha = self._factor_combiner.combine(factor_results, regime=regime)
-        self._latest_alpha[symbol] = alpha
-
-        # Classify
-        if alpha.score > cfg.buy_threshold:
-            signal = "BUY"
-        elif alpha.score < cfg.sell_threshold:
-            signal = "SELL"
-        else:
-            signal = "HOLD"
-
-        # Build a compatible AggregateResult for the existing dashboard
-        from src.indicators.aggregator import AggregateResult, IndicatorSnapshot
-        from datetime import datetime, timezone
-        compat = AggregateResult(
+        inst = Instrument(
             symbol=symbol,
-            timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            regime=regime,
-            score=alpha.score,
-            final_signal=signal,
-            confirmed=signal != "HOLD",
-            indicators=[],
-            buy_count=0,
-            sell_count=0,
-            hold_count=0,
-            price=float(df["close"].iloc[-1]),
+            instrument_type=InstrumentType.EQUITY,
+            exchange="SMART",
+            currency=Currency.USD,
+            multiplier=1.0,
+            tick_size=0.01,
+            margin_initial=0.0,
+            margin_maintenance=0.0,
         )
-        self._latest[symbol] = compat
-        self.dashboard.update(symbol, compat)
 
-        if signal != "HOLD":
-            logger.info(
-                "[FACTOR] [%s] %s  score=%.3f  regime=%s  factors=%d",
-                symbol, signal, alpha.score, regime, alpha.active_factor_count,
-            )
+    bars: list[Bar] = []
+    for row in df.iter_rows(named=True):
+        ts = (row.get("event_time") or row.get("timestamp")
+              or row.get("date") or row.get("datetime"))
+        if ts is None:
+            continue
+        if hasattr(ts, "replace"):
+            ts = ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
+        bars.append(Bar(
+            instrument=inst,
+            timestamp=ts,
+            open=float(row.get("open", 0)),
+            high=float(row.get("high", 0)),
+            low=float(row.get("low", 0)),
+            close=float(row.get("close", 0)),
+            volume=float(row.get("volume", 0)),
+        ))
 
-        if self.auto_trader and signal != "HOLD":
-            # Compute ATR-based size
-            atr_val = 0.01
-            try:
-                atr_series = ta.atr(df["high"], df["low"], df["close"], length=14)
-                if atr_series is not None:
-                    clean = atr_series.dropna()
-                    if len(clean):
-                        atr_val = float(clean.iloc[-1])
-            except Exception:
-                pass
+    hkd_rate = cfg.risk.default_hkd_usd_rate
+    risk_engine = RiskEngine(cfg.risk, hkd_usd_rate=hkd_rate)
 
-            loop = asyncio.get_event_loop()
-            asyncio.run_coroutine_threadsafe(
-                self.auto_trader.on_signal(symbol, signal, df, alpha.score),
-                loop,
-            )
+    layer1 = Layer1(cfg.strategy.layer1)
+    if model_path is not None:
+        logger.info(f"加载预训练模型：{model_path}")
+        layer1.load_model(model_path)
 
-    async def _shutdown(self) -> None:
-        logger.info("Shutting down…")
-        self._running = False
-        self.dashboard.stop()
-        if self.aggregator is not None:
-            self.aggregator.close()
-        await self.feed.stop()
-        logger.info("Goodbye.")
+    engine = BacktestEngine(
+        config=cfg,
+        registry=registry,
+        layer1=layer1,
+        layer2=Layer2(cfg.strategy.layer2),
+        composer=DefaultComposer(cfg.strategy),
+        pre_risk=risk_engine.pre_trade,
+        post_risk=risk_engine.post_trade,
+        sizer=ATRPositionSizer(cfg.risk, hkd_usd_rate=hkd_rate),
+        hkd_usd_rate=hkd_rate,
+    )
+
+    result = engine.run({symbol: bars})
+    m = result.metrics
+    logger.info(
+        f"\n{'='*50}\n"
+        f"回测结果 — {symbol}\n"
+        f"  总收益率：{m.total_return:.2%}\n"
+        f"  年化收益：{m.annualized_return:.2%}\n"
+        f"  Sharpe：{m.sharpe_ratio:.2f}\n"
+        f"  Sortino：{m.sortino_ratio:.2f}\n"
+        f"  Calmar：{m.calmar_ratio:.2f}\n"
+        f"  最大回撤：{m.max_drawdown:.2%}\n"
+        f"  胜率：{m.win_rate:.2%}\n"
+        f"  总交易次数：{m.total_trades}\n"
+        f"{'='*50}"
+    )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Entry
-# ─────────────────────────────────────────────────────────────────────────────
+def main() -> None:
+    parser = argparse.ArgumentParser(description="IBKR Signal Assistant")
+    parser.add_argument("--config", default="configs/app.yaml", help="配置文件路径")
+    parser.add_argument("--backtest", action="store_true", help="运行回测模式")
+    parser.add_argument("--data", help="回测数据文件路径（CSV 或 Parquet）")
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="预训练 Layer1 模型目录路径（可选，含 meta.json + 模型文件）",
+    )
+    args = parser.parse_args()
 
-async def _main() -> None:
-    assistant = TradingAssistant()
+    cfg = load_config(args.config)
+    setup_logging(cfg)
+    registry = InstrumentRegistry.from_yaml(cfg.instruments_path)
 
-    loop = asyncio.get_running_loop()
-
-    def _handle_signal(signum, frame):  # noqa: ARG001
-        logger.info("Signal %d received — stopping.", signum)
-        assistant._running = False
-
-    for s in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(s, lambda sig=s: _handle_signal(sig, None))
-        except NotImplementedError:
-            # Windows
-            signal.signal(s, _handle_signal)
-
-    await assistant.run()
+    if args.backtest:
+        if not args.data:
+            print("错误：回测模式需要 --data 参数")
+            sys.exit(1)
+        run_backtest(cfg, registry, args.data, args.model)
+    else:
+        asyncio.run(run_live(cfg, registry))
 
 
 if __name__ == "__main__":
-    # Use ib_insync's event loop integration
-    util.startLoop()
-    asyncio.run(_main())
+    main()

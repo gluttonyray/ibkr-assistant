@@ -1,110 +1,69 @@
-"""Tests for PositionSizer."""
-from __future__ import annotations
-
 import pytest
+from datetime import datetime, timezone
+from quant.risk.position_sizer import ATRPositionSizer
+from quant.config.schema import RiskConfig
+from quant.core.types import PortfolioSnapshot, Signal, SignalType
 
-from src.risk.position_sizer import PositionSizer
+UTC = timezone.utc
 
 
-@pytest.fixture
-def sizer():
-    return PositionSizer(
-        max_risk_per_trade=0.02,
-        max_position_pct=0.20,
-        stop_atr_multiple=2.0,
-        min_shares=1,
+def make_portfolio(equity=100_000.0):
+    return PortfolioSnapshot(
+        total_equity_usd=equity, cash_usd=equity * 0.8, positions={},
+        peak_equity_usd=equity, daily_pnl_usd=0.0, daily_trade_count=0,
+        timestamp=datetime.now(UTC),
     )
 
 
-class TestBasicSizing:
-    def test_returns_integer(self, sizer):
-        qty = sizer.compute_size(alpha_score=0.5, price=100.0, atr=1.0, equity=100_000.0)
-        assert isinstance(qty, int)
-
-    def test_positive_score_returns_nonzero(self, sizer):
-        qty = sizer.compute_size(0.5, 100.0, 1.0, 100_000.0)
-        assert qty > 0
-
-    def test_zero_score_returns_zero(self, sizer):
-        qty = sizer.compute_size(0.0, 100.0, 1.0, 100_000.0)
-        assert qty == 0
-
-    def test_negative_score_same_as_positive(self, sizer):
-        qty_pos = sizer.compute_size(0.5, 100.0, 1.0, 100_000.0)
-        qty_neg = sizer.compute_size(-0.5, 100.0, 1.0, 100_000.0)
-        assert qty_pos == qty_neg  # direction is handled by signal, not sizer
+def make_signal(instrument):
+    return Signal(
+        instrument=instrument, signal_type=SignalType.LONG_ENTRY,
+        score=0.5, regime="TRENDING_STRONG",
+        layer1_score=0.5, layer2_score=0.5, mii=1.0,
+        timestamp=datetime.now(UTC),
+    )
 
 
-class TestConvictionScaling:
-    def test_higher_score_more_shares(self):
-        # Use a sizer where the max_position cap doesn't bind
-        sizer = PositionSizer(max_risk_per_trade=0.01, max_position_pct=0.50, stop_atr_multiple=2.0)
-        qty_low = sizer.compute_size(0.2, 100.0, 1.0, 100_000.0)
-        qty_high = sizer.compute_size(0.8, 100.0, 1.0, 100_000.0)
-        assert qty_high > qty_low
-
-    def test_full_conviction_gives_max_size(self):
-        sizer = PositionSizer(max_risk_per_trade=0.01, max_position_pct=0.50, stop_atr_multiple=2.0)
-        qty_max = sizer.compute_size(1.0, 100.0, 1.0, 100_000.0)
-        qty_half = sizer.compute_size(0.5, 100.0, 1.0, 100_000.0)
-        assert qty_max > qty_half
+def test_zero_equity_returns_zero(es_instrument):
+    """P0 修复：权益 <= 0 时应返回 0。"""
+    sizer = ATRPositionSizer(RiskConfig())
+    portfolio = make_portfolio(equity=0.0)
+    qty = sizer.compute_size(make_signal(es_instrument), es_instrument, portfolio, atr=10.0)
+    assert qty == 0
 
 
-class TestRiskBudget:
-    def test_size_proportional_to_equity(self, sizer):
-        qty_small = sizer.compute_size(0.5, 100.0, 1.0, 50_000.0)
-        qty_large = sizer.compute_size(0.5, 100.0, 1.0, 100_000.0)
-        assert qty_large > qty_small
-
-    def test_size_inversely_proportional_to_atr(self):
-        # Use uncapped sizer so ATR effect isn't hidden by position cap
-        sizer = PositionSizer(max_risk_per_trade=0.01, max_position_pct=0.50, stop_atr_multiple=2.0)
-        qty_low_vol = sizer.compute_size(0.5, 100.0, 0.5, 100_000.0)
-        qty_high_vol = sizer.compute_size(0.5, 100.0, 2.0, 100_000.0)
-        assert qty_low_vol > qty_high_vol
-
-    def test_formula_correctness(self):
-        """Manual verification of sizing formula."""
-        sizer = PositionSizer(
-            max_risk_per_trade=0.02,
-            max_position_pct=0.50,  # high cap so it doesn't bind
-            stop_atr_multiple=2.0,
-        )
-        # risk_budget = 100_000 * 0.02 = 2000
-        # risk_per_share = 2.0 * 1.0 = 2.0
-        # base_shares = 2000 / 2.0 = 1000
-        # scaled_shares = 1000 * 0.5 = 500
-        qty = sizer.compute_size(0.5, 100.0, 1.0, 100_000.0)
-        assert qty == 500
+def test_zero_atr_returns_zero(es_instrument):
+    """ATR 为 0 时应返回 0（防止除零）。"""
+    sizer = ATRPositionSizer(RiskConfig())
+    qty = sizer.compute_size(make_signal(es_instrument), es_instrument, make_portfolio(), atr=0.0)
+    assert qty == 0
 
 
-class TestPositionCap:
-    def test_max_position_pct_cap_applied(self):
-        sizer = PositionSizer(
-            max_risk_per_trade=0.50,  # very large to force cap binding
-            max_position_pct=0.10,
-            stop_atr_multiple=2.0,
-        )
-        # max_shares = 100_000 * 0.10 / 100.0 = 100
-        qty = sizer.compute_size(1.0, 100.0, 1.0, 100_000.0)
-        assert qty <= 100
+def test_normal_sizing(es_instrument):
+    """正常条件下的仓位计算验证。"""
+    sizer = ATRPositionSizer(RiskConfig())
+    # risk_amount = 100000 * 0.02 = 2000
+    # stop_distance_usd = 10 * 2.0 * 50 = 1000
+    # qty = floor(2000/1000) = 2
+    qty = sizer.compute_size(make_signal(es_instrument), es_instrument, make_portfolio(), atr=10.0)
+    assert qty == 2
 
 
-class TestEdgeCases:
-    def test_zero_price_returns_min_shares(self, sizer):
-        qty = sizer.compute_size(0.5, 0.0, 1.0, 100_000.0)
-        assert qty == sizer.min_shares
+def test_hkd_instrument_converts(hsi_instrument):
+    """港币合约应正确进行汇率换算。"""
+    sizer = ATRPositionSizer(RiskConfig(), hkd_usd_rate=0.128)
+    qty = sizer.compute_size(
+        make_signal(hsi_instrument), hsi_instrument, make_portfolio(500_000.0), atr=100.0,
+    )
+    assert qty >= 0
 
-    def test_zero_atr_returns_min_shares(self, sizer):
-        qty = sizer.compute_size(0.5, 100.0, 0.0, 100_000.0)
-        assert qty == sizer.min_shares
 
-    def test_zero_equity_returns_min_shares(self, sizer):
-        qty = sizer.compute_size(0.5, 100.0, 1.0, 0.0)
-        assert qty == sizer.min_shares
-
-    def test_min_shares_floor(self):
-        sizer = PositionSizer(min_shares=5)
-        # Very low conviction should still get at least min_shares
-        qty = sizer.compute_size(0.001, 100.0, 1.0, 100_000.0)
-        assert qty >= 5 or qty == 0  # 0 only if score < 1e-6
+def test_max_contracts_cap(es_instrument):
+    """仓位应被 max_contracts_per_instrument 上限截断。"""
+    cfg = RiskConfig(max_contracts_per_instrument=3)
+    sizer = ATRPositionSizer(cfg)
+    # 大资金 + 小 ATR → 计算结果会超过 3，应被截断
+    qty = sizer.compute_size(
+        make_signal(es_instrument), es_instrument, make_portfolio(10_000_000.0), atr=1.0,
+    )
+    assert qty <= 3

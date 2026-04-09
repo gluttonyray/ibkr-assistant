@@ -1,0 +1,88 @@
+# IBKR Signal Assistant — 运行时配置
+# 所有字段均有合理默认值，仅需覆盖需要修改的部分
+
+ibkr:
+  host: "127.0.0.1"
+  port: 7497          # TWS paper: 7497 / TWS live: 7496 / Gateway: 4001
+  client_id: 1
+  symbols: [ES, NQ, YM, RTY, HSI, MHI, HHI]
+  bar_size: "15 min"
+  history_bars: 500
+
+strategy:
+  layer1:
+    weight: 0.35
+    daily_lookback_bars: 252
+    bar_lookback_bars: 500
+    mii_amplitude_lookback: 60
+    mii_extreme_percentile: 95.0
+    mii_duration_halflife: 10
+    mii_volume_confirm: true
+    # Walk-forward 重训练参数
+    retrain_interval_bars: 130     # 每 130 bars（≈2个交易日）触发重训练
+    retrain_window_bars: 13000     # 训练窗口 13000 bars（≈100个交易日）
+    forward_horizon_bars: 26       # 前瞻预测跨度 26 bars（≈6.5小时）
+    staleness_halflife_hours: 8.0
+  layer2:
+    weight: 0.65
+    use_ic_weights: true
+    ic_lookback_bars: 500
+    ic_forward_horizon: 10
+    ic_shrinkage: 0.5
+    confirm_bars: 3
+    entry_threshold: 0.3
+    exit_threshold: 0.05
+  open_filter_minutes: 15
+  auto_trade: false    # false = 信号模式（不下单）
+
+risk:
+  risk_per_trade: 0.02
+  stop_loss_atr: 2.0
+  take_profit_atr: 4.0
+  trailing_stop_atr: 1.5
+  max_leverage: 2.0
+  max_contracts_per_instrument: 10
+  max_portfolio_positions: 5
+  max_drawdown_pct: 0.10
+  max_daily_loss_usd: 5000.0
+  max_daily_trades: 20
+  circuit_breaker_drawdown: 0.08
+  circuit_breaker_cooldown_bars: 40
+  tiered_exit_aggressive_ticks: 3
+  max_holding_bars: 0
+  default_hkd_usd_rate: 0.128
+
+cost:
+  CME:
+    commission_per_contract: 0.85
+    commission_min: 0.0
+    exchange_fee_per_contract: 1.28
+    nfa_fee_per_contract: 0.02
+    slippage_ticks: 1.0
+  CBOT:
+    commission_per_contract: 0.85
+    commission_min: 0.0
+    exchange_fee_per_contract: 1.28
+    nfa_fee_per_contract: 0.02
+    slippage_ticks: 1.0
+  HKEX:
+    commission_per_contract: 20.0
+    commission_min: 0.0
+    exchange_fee_per_contract: 10.0
+    nfa_fee_per_contract: 0.0
+    slippage_ticks: 1.0
+
+backtest:
+  warmup_bars: 210
+  window_size: 500
+  initial_capital: 100000.0
+  data_dir: "data/"
+  train_months: 6
+  test_months: 2
+  cv_embargo_bars: 5
+
+instruments_path: "configs/instruments.yaml"
+log_file: "logs/signals.log"
+log_level: "INFO"
+fred_api_key: ""
+refresh_interval: 15

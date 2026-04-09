@@ -1,10 +1,44 @@
-.env
-*.log
-logs/
-.pytest_cache/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# 虚拟环境
 .venv/
-/data/
-backtest_report*.html
-.claude/
+venv/
+env/
+
+# 数据文件（体积过大，不入 git）
+data/training_universe/
+data/universe_cache/
+data/*.csv
+data/*.parquet
+data/margin_cache.json
+
+# 模型文件
+models/
+
+# 日志 & 运行产物
+logs/
+*.log
+results/
+test_result/
+
+# 配置中的敏感信息
+.env
+configs/secrets.yaml
+
+# IDE & 系统
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/

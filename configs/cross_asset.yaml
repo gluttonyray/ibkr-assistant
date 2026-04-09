@@ -1,0 +1,34 @@
+cross_asset:
+  etf_universe:
+    - { symbol: "SPY",  asset_class: "equity",    region: "US",  name: "S&P 500" }
+    - { symbol: "EFA",  asset_class: "equity",    region: "DM",  name: "MSCI EAFE" }
+    - { symbol: "EEM",  asset_class: "equity",    region: "EM",  name: "Emerging Markets" }
+    - { symbol: "TLT",  asset_class: "bond",      region: "US",  name: "20+ Year Treasury" }
+    - { symbol: "IEF",  asset_class: "bond",      region: "US",  name: "7-10 Year Treasury" }
+    - { symbol: "GLD",  asset_class: "commodity", region: "GL",  name: "Gold" }
+    - { symbol: "USO",  asset_class: "commodity", region: "GL",  name: "Crude Oil" }
+    - { symbol: "CPER", asset_class: "commodity", region: "GL",  name: "Copper" }
+    - { symbol: "DBC",  asset_class: "commodity", region: "GL",  name: "Commodities Basket" }
+    - { symbol: "UUP",  asset_class: "fx",        region: "GL",  name: "US Dollar" }
+    - { symbol: "FXE",  asset_class: "fx",        region: "GL",  name: "Euro" }
+    - { symbol: "FXY",  asset_class: "fx",        region: "GL",  name: "Japanese Yen" }
+
+  tsmom:
+    lookback_months: 12
+    skip_months: 1
+    vol_window_days: 63
+    vol_target: 0.10
+
+  regime_indicators:
+    yield_spread:
+      source: fred
+      series: [DGS10, DGS2]
+    credit_spread:
+      source: fred
+      series: [BAMLC0A0CM]
+      fallback_series: BAMLC0A4CBBB
+    vix:
+      source: yahoo
+      ticker: "^VIX"
+
+  ffill_limit_days: 5

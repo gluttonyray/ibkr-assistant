@@ -1,0 +1,149 @@
+# 量化期货交易系统的合约规格。
+#
+# 每条记录定义一个期货合约，包含交易所、货币、合约乘数、
+# 最小变动价位、保证金要求以及交易时段。
+#
+# 保证金数值为 SPAN/交易所最低保证金的近似值。盈透证券的房屋保证金
+# 可能更高；实盘交易时系统会通过 whatIfOrder 实时查询，
+# 回测时则使用此处的静态值。
+#
+# 时段时间以各合约所在地时区表示。跨午夜时段（结束时间早于开始时间）
+# 已支持（例如港交所 T+1 时段：17:15 -> 03:00）。
+#
+# 最后更新：2026-03-31
+
+instruments:
+
+  # =========================================================================
+  # 美国股指期货 -- CME Globex（周日至周五近 24 小时）
+  # 交易时间：美中时间周日 17:00 - 周五 16:00
+  # 每日维护中断：16:00-16:15 CT（周一至周四）
+  # =========================================================================
+
+  ES:
+    type: FUTURE
+    exchange: CME
+    currency: USD
+    multiplier: 50            # 每指数点 50 美元
+    tick_size: 0.25           # 每跳 12.50 美元
+    margin_initial: 15200     # CME SPAN 初始保证金（美元）
+    margin_maintenance: 13800
+    sessions:
+      - label: "Globex"
+        timezone: "America/Chicago"
+        start: "17:00"
+        end: "16:00"
+
+  NQ:
+    type: FUTURE
+    exchange: CME
+    currency: USD
+    multiplier: 20            # 每指数点 20 美元
+    tick_size: 0.25           # 每跳 5.00 美元
+    margin_initial: 21000
+    margin_maintenance: 19000
+    sessions:
+      - label: "Globex"
+        timezone: "America/Chicago"
+        start: "17:00"
+        end: "16:00"
+
+  YM:
+    type: FUTURE
+    exchange: CBOT
+    currency: USD
+    multiplier: 5             # 每指数点 5 美元
+    tick_size: 1.0            # 每跳 5.00 美元
+    margin_initial: 11000
+    margin_maintenance: 10000
+    sessions:
+      - label: "Globex"
+        timezone: "America/Chicago"
+        start: "17:00"
+        end: "16:00"
+
+  RTY:
+    type: FUTURE
+    exchange: CME
+    currency: USD
+    multiplier: 50            # 每指数点 50 美元
+    tick_size: 0.10           # 每跳 5.00 美元
+    margin_initial: 8800
+    margin_maintenance: 8000
+    sessions:
+      - label: "Globex"
+        timezone: "America/Chicago"
+        start: "17:00"
+        end: "16:00"
+
+  # =========================================================================
+  # 香港股指期货 -- 港交所（HKEX）
+  # 三个时段：早盘、午盘、收市后（T+1）
+  # 所有时间均以 Asia/Hong_Kong（HKT，UTC+8，无夏令时）为准
+  # =========================================================================
+
+  HSI:
+    type: FUTURE
+    exchange: HKEX
+    currency: HKD
+    multiplier: 50            # 每指数点 50 港元
+    tick_size: 1.0            # 每跳 50 港元
+    margin_initial: 132180    # 港交所 SPAN 保证金（港元）
+    margin_maintenance: 105744
+    sessions:
+      - label: "Morning"
+        timezone: "Asia/Hong_Kong"
+        start: "09:15"
+        end: "12:00"
+      - label: "Afternoon"
+        timezone: "Asia/Hong_Kong"
+        start: "13:00"
+        end: "16:30"
+      - label: "T+1"
+        timezone: "Asia/Hong_Kong"
+        start: "17:15"
+        end: "03:00"
+
+  MHI:
+    type: FUTURE
+    exchange: HKEX
+    currency: HKD
+    multiplier: 10            # 每指数点 10 港元（恒指小型合约）
+    tick_size: 1.0            # 每跳 10 港元
+    margin_initial: 26436     # 港交所 SPAN 保证金（港元）
+    margin_maintenance: 21149
+    sessions:
+      - label: "Morning"
+        timezone: "Asia/Hong_Kong"
+        start: "09:15"
+        end: "12:00"
+      - label: "Afternoon"
+        timezone: "Asia/Hong_Kong"
+        start: "13:00"
+        end: "16:30"
+      - label: "T+1"
+        timezone: "Asia/Hong_Kong"
+        start: "17:15"
+        end: "03:00"
+
+  HHI:
+    type: FUTURE
+    exchange: HKEX
+    currency: HKD
+    multiplier: 50            # 每指数点 50 港元（H 股指数）
+    tick_size: 1.0            # 每跳 50 港元
+    margin_initial: 56000     # 港交所 SPAN 保证金（港元）
+    margin_maintenance: 44800
+    sessions:
+      - label: "Morning"
+        timezone: "Asia/Hong_Kong"
+        start: "09:15"
+        end: "12:00"
+      - label: "Afternoon"
+        timezone: "Asia/Hong_Kong"
+        start: "13:00"
+        end: "16:30"
+      - label: "T+1"
+        timezone: "Asia/Hong_Kong"
+        start: "17:15"
+        end: "03:00"

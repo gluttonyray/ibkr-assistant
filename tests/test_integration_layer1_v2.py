@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).parent.parent
 
 import numpy as np
 import pytest
@@ -313,7 +316,7 @@ class TestFullTestSuiteCount:
             ],
             capture_output=True,
             text=True,
-            cwd="/Users/ray/Desktop/Claude Code/ibkr-signal-assistant",
+            cwd=str(_REPO_ROOT),
             timeout=60,
         )
         # 解析输出的最后几行，形如 "112 tests collected"

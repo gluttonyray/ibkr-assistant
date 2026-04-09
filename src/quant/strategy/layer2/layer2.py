@@ -5,12 +5,12 @@ from collections import deque
 import numpy as np
 
 from quant.config.schema import Layer2Config
-from quant.core.types import Bar, Instrument
 from quant.core.strategy import Layer1Result, Layer2Result
+from quant.core.types import Bar, Instrument
 from quant.strategy.layer2.factors.momentum import ROC20, MeanRev5
-from quant.strategy.layer2.factors.volatility import VolRatio, BBWidth
+from quant.strategy.layer2.factors.trend import ADXStrength, EMASlope
+from quant.strategy.layer2.factors.volatility import BBWidth, VolRatio
 from quant.strategy.layer2.factors.volume import OBVMomentum, VolumeAccel
-from quant.strategy.layer2.factors.trend import EMASlope, ADXStrength
 from quant.strategy.layer2.ic_weights import ICWeightCalculator
 
 _ALL_FACTORS = [

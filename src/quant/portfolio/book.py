@@ -5,15 +5,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from quant.core.types import (
     Bar,
     Currency,
     Fill,
     Instrument,
-    Position,
     PortfolioSnapshot,
+    Position,
     Side,
 )
 from quant.portfolio.cost_model import FuturesCostModel
@@ -70,7 +70,7 @@ class PortfolioBook:
             peak_equity_usd=self._peak_equity_usd,
             daily_pnl_usd=self._daily_pnl_usd,
             daily_trade_count=self._daily_trade_count,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     def get_position(self, instrument: Instrument) -> Position | None:

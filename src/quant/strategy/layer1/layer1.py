@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -420,7 +420,7 @@ class Layer1:
         windows: dict[Instrument, list[Bar]],
     ) -> dict[Instrument, Layer1Result]:
         """使用单一池化模型 + GlobalState 进行推理。"""
-        as_of = datetime.now(timezone.utc)
+        as_of = datetime.now(UTC)
         sym_windows = {inst.symbol: bars for inst, bars in windows.items()}
 
         pca_universe = list(self._cfg.pca_universe_symbols) or None
@@ -538,7 +538,7 @@ class Layer1:
     ) -> dict[Instrument, Layer1Result]:
         """使用逐品种模型进行推理（v1 路径）。"""
         results: dict[Instrument, Layer1Result] = {}
-        as_of = datetime.now(timezone.utc)
+        as_of = datetime.now(UTC)
         sym_windows = {inst.symbol: bars for inst, bars in windows.items()}
 
         for inst, bars in windows.items():

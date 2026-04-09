@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from quant.config.schema import Layer1Config
 from quant.strategy.layer1.backends._sklearn_base import SklearnTabularBase
 
 

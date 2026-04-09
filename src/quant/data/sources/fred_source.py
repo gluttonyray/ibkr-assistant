@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import polars as pl
 import requests
@@ -98,7 +98,7 @@ class FREDSource:
             obs_date = obs["date"]  # "YYYY-MM-DD"
             obs_val = obs["value"]
 
-            dt = datetime.strptime(obs_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            dt = datetime.strptime(obs_date, "%Y-%m-%d").replace(tzinfo=UTC)
             dates.append(dt)
 
             # FRED 用 "." 表示缺失值

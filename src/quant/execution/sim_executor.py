@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 import logging
 from collections import deque
-from datetime import datetime, timezone
-from quant.core.types import Fill, Instrument, Side
+from datetime import UTC, datetime
+
 from quant.core.events import OrderEvent
+from quant.core.types import Fill, Instrument, Side
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +38,14 @@ class SimExecutor:
         order_type: str = "MARKET",
         limit_price: float | None = None,
     ) -> str:
-        order_id = f"sim-{instrument.symbol}-{datetime.now(timezone.utc).timestamp():.0f}"
+        order_id = f"sim-{instrument.symbol}-{datetime.now(UTC).timestamp():.0f}"
         order = OrderEvent(
             instrument=instrument,
             side=side,
             qty=qty,
             order_type=order_type,
             limit_price=limit_price,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             order_id=order_id,
         )
         self._pending.append(order)

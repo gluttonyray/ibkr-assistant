@@ -22,13 +22,13 @@ import logging
 import re
 import time
 from pathlib import Path
-from urllib.request import Request, urlopen
 from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 from quant.data.universe.ticker_universe import (
+    _DEFAULT_TICKERS,
     AssetClass,
     TickerUniverse,
-    _DEFAULT_TICKERS,
 )
 
 logger = logging.getLogger(__name__)

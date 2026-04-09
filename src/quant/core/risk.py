@@ -11,8 +11,8 @@ from typing import Protocol, runtime_checkable
 from quant.core.types import (
     Bar,
     Instrument,
-    Position,
     PortfolioSnapshot,
+    Position,
     Signal,
 )
 

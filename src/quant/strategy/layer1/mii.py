@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 import numpy as np
+
 from quant.config.schema import Layer1Config
+
 
 class MIICalculator:
     """动量信息含量指数（Momentum Information Index），∈ [0, 1]。

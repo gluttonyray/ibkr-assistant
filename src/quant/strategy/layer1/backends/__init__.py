@@ -1,7 +1,8 @@
 """Layer1 后端注册表与工厂函数。"""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from quant.config.schema import Layer1Config
 from quant.strategy.layer1.backend_protocol import ModelBackend

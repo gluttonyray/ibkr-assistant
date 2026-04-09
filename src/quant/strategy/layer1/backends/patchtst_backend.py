@@ -5,7 +5,6 @@ Nie et al. (2023) PatchTST：将时序切分为 patch，
 """
 from __future__ import annotations
 
-import math
 from typing import Any
 
 from quant.config.schema import Layer1Config

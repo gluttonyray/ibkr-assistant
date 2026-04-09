@@ -19,7 +19,6 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # ---------------------------------------------------------------------------
 # IBKR 连接
 # ---------------------------------------------------------------------------

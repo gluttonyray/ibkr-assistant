@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 
 from quant.config.schema import StrategyConfig
-from quant.core.types import Instrument, Signal, SignalType
 from quant.core.strategy import Layer1Result, Layer2Result
+from quant.core.types import Instrument, Signal, SignalType
 
 
 class DefaultComposer:

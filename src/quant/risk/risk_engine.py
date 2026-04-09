@@ -8,8 +8,8 @@ from quant.core.types import (
     Bar,
     Currency,
     Instrument,
-    Position,
     PortfolioSnapshot,
+    Position,
     Signal,
 )
 

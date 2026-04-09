@@ -9,8 +9,8 @@ from typing import Protocol, runtime_checkable
 
 from quant.core.types import (
     Instrument,
-    Position,
     PortfolioSnapshot,
+    Position,
 )
 
 

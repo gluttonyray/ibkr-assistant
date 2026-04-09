@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from quant.instrument.registry import InstrumentRegistry
@@ -219,7 +219,7 @@ class IBKRMarginRefresher:
         except ValueError:
             return None
 
-        age = (datetime.now(timezone.utc) - saved_at).total_seconds()
+        age = (datetime.now(UTC) - saved_at).total_seconds()
         if age > self._ttl_seconds:
             logger.info(
                 "保证金缓存已过期（%.1f 小时 > TTL %.1f 小时）",
@@ -237,7 +237,7 @@ class IBKRMarginRefresher:
         """将查询结果写入本地 JSON 缓存。"""
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "saved_at": datetime.now(UTC).isoformat(),
             "ttl_hours": self._ttl_seconds / 3600,
             "margins": {sym: list(pair) for sym, pair in margins.items()},
         }

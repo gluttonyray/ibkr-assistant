@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from quant.config.schema import IBKRConfig
 from quant.core.types import Currency, Fill, Instrument, InstrumentType, Side
 from quant.instrument.registry import InstrumentRegistry
@@ -47,7 +49,7 @@ class IBKRExecutor:
                 wait = 2 ** attempt
                 logger.warning(f"IBKR connect attempt {attempt+1} failed: {e}. Retrying in {wait}s...")
                 await asyncio.sleep(wait)
-        raise ConnectionError(f"Failed to connect to IBKR after 3 attempts")
+        raise ConnectionError("Failed to connect to IBKR after 3 attempts")
 
     async def disconnect(self) -> None:
         if self._ib is not None:
@@ -68,7 +70,7 @@ class IBKRExecutor:
         if self._daily_order_count >= self._cfg.history_bars:  # 复用 max field
             raise RuntimeError(f"Daily order limit reached: {self._daily_order_count}")
 
-        from ib_insync import Future, MarketOrder, LimitOrder
+        from ib_insync import LimitOrder, MarketOrder
 
         contract = self._build_contract(instrument)
         action = "BUY" if side == Side.BUY else "SELL"
@@ -114,7 +116,7 @@ class IBKRExecutor:
                 side=side,
                 qty=int(fill.execution.shares),
                 price=float(fill.execution.price),
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 commission=float(fill.commissionReport.commission) if fill.commissionReport else 0.0,
                 exchange_fees=0.0,
                 slippage_cost=0.0,

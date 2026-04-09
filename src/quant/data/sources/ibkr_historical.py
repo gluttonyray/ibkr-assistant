@@ -12,8 +12,7 @@ import asyncio
 import logging
 import re
 import time as _time
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 
 import polars as pl
 
@@ -26,7 +25,8 @@ from quant.instrument.registry import InstrumentRegistry
 logger = logging.getLogger(__name__)
 
 try:
-    from ib_insync import IB, Contract, util as ib_util
+    from ib_insync import IB, Contract
+    from ib_insync import util as ib_util  # noqa: F401
 
     _HAS_IB_INSYNC = True
 except ImportError:
@@ -234,7 +234,7 @@ class IBKRHistoricalSource:
                 if isinstance(ts, str):
                     ts = datetime.fromisoformat(ts)
                 if ts.tzinfo is None:
-                    ts = ts.replace(tzinfo=timezone.utc)
+                    ts = ts.replace(tzinfo=UTC)
 
                 all_bars.append(
                     {
@@ -256,7 +256,7 @@ class IBKRHistoricalSource:
             if isinstance(earliest, str):
                 earliest = datetime.fromisoformat(earliest)
             if earliest.tzinfo is None:
-                earliest = earliest.replace(tzinfo=timezone.utc)
+                earliest = earliest.replace(tzinfo=UTC)
             chunk_end = earliest
 
         if not all_bars:
@@ -351,9 +351,9 @@ class IBKRHistoricalSource:
             start = last_ts + timedelta(seconds=1)
         else:
             # 默认：30 天历史数据
-            start = datetime.now(timezone.utc) - timedelta(days=30)
+            start = datetime.now(UTC) - timedelta(days=30)
 
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
 
         df = self.fetch_bars(symbol, bar_size, start, end)
 

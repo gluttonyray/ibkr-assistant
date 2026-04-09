@@ -18,15 +18,14 @@ GlobalState
 from __future__ import annotations
 
 import pickle
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
 
 from quant.core.types import Bar, Instrument
-
 
 # ---------------------------------------------------------------------------
 # GlobalState — 全局市场状态（规格 §12.2）
@@ -233,7 +232,7 @@ class GlobalStateBuilder:
         # -- 复合收益率（规格 §4）-------------------------------------
         active_vs5 = [vs_ret_5[s] for s in symbols if s in vs_ret_5]
         active_vs20 = [vs_ret_20[s] for s in symbols if s in vs_ret_20]
-        active_vols = [vols[s] for s in symbols if vols.get(s, 0) > self._eps]
+        _active_vols = [vols[s] for s in symbols if vols.get(s, 0) > self._eps]  # reserved
 
         composite_ew_ret_5 = float(np.mean(active_vs5)) if active_vs5 else 0.0
         composite_ew_ret_20 = float(np.mean(active_vs20)) if active_vs20 else 0.0

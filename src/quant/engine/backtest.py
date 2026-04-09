@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 
 import numpy as np
@@ -32,9 +32,9 @@ from quant.core.strategy import (
 from quant.core.types import (
     Bar,
     Fill,
+    Side,
     Signal,
     SignalType,
-    Side,
 )
 from quant.engine.base import BaseEngine
 from quant.instrument.registry import InstrumentRegistry
@@ -351,7 +351,7 @@ class BacktestEngine(BaseEngine):
             book.positions(), current_bars, book.snapshot()
         )
 
-        for inst, reason in exit_list:
+        for inst, _reason in exit_list:
             sym = inst.symbol
             if sym in book.positions():
                 pos = book.get_position(inst)

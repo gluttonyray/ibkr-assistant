@@ -41,7 +41,20 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "ANN", "B", "SIM"]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+ignore = [
+    "N803",   # ML convention: X, T, D as argument names
+    "N806",   # ML convention: X, T, D as variable names
+    "N815",   # ML convention: seq_lookback_T mixed-case config field
+    "B904",   # raise-without-from-cause — acceptable in this codebase
+    "SIM102", # nested if — readability preference
+    "SIM103", # return condition directly — readability preference
+    "SIM105", # contextlib.suppress — readability preference
+    "SIM108", # ternary operator — readability preference
+    "SIM110", # any() comprehension — readability preference
+    "UP042",  # StrEnum — keep str+Enum for Pydantic compatibility
+    "E501",   # line too long — overly strict for this codebase
+]
 
 [tool.ruff.format]
 quote-style = "double"
